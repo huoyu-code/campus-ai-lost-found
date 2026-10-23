@@ -6,6 +6,7 @@ import com.campus.lostfound.post.dto.PostQuery;
 import com.campus.lostfound.post.dto.UpdatePostRequest;
 import com.campus.lostfound.post.dto.UpdatePostStatusRequest;
 import com.campus.lostfound.post.vo.PostVO;
+import com.campus.lostfound.search.dto.PostSearchQuery;
 
 /**
  * 失物/招领帖子业务边界。
@@ -26,6 +27,11 @@ public interface PostService {
      * 返回公开状态的分页帖子列表。
      */
     PageResult<PostVO> pagePublic(PostQuery query);
+
+    /**
+     * 在 MySQL 中按关键词和组合条件搜索普通用户可见的帖子。
+     */
+    PageResult<PostVO> searchPublic(PostSearchQuery query);
 
     /**
      * 返回当前用户发布的全部状态帖子。

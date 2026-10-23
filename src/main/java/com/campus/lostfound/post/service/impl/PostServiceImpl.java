@@ -24,6 +24,8 @@ import com.campus.lostfound.post.mapper.PostImageMapper;
 import com.campus.lostfound.post.service.PostService;
 import com.campus.lostfound.post.vo.PostVO;
 import com.campus.lostfound.post.vo.UserSummaryVO;
+import com.campus.lostfound.search.dto.PostSearchQuery;
+import com.campus.lostfound.search.enums.PostSort;
 import com.campus.lostfound.user.entity.SysUser;
 import com.campus.lostfound.user.enums.UserRole;
 import com.campus.lostfound.user.enums.UserStatus;
@@ -113,6 +115,38 @@ public class PostServiceImpl implements PostService {
         }
         wrapper.orderByDesc(LostFoundPost::getCreatedAt)
                 .orderByDesc(LostFoundPost::getId);
+        return page(wrapper, query);
+    }
+
+    @Override
+    public PageResult<PostVO> searchPublic(PostSearchQuery query) {
+        validateRange(query);
+        LambdaQueryWrapper<LostFoundPost> wrapper = baseQuery(query);
+
+        // 关键词只匹配普通用户可搜索的文本字段。Wrapper 会生成参数占位符，
+        // 即使用户输入 SQL 片段也只会被当作普通字符串值。
+        String keyword = trimToNull(query.getKeyword());
+        if (keyword != null) {
+            wrapper.and(nested -> nested
+                    .like(LostFoundPost::getTitle, keyword)
+                    .or()
+                    .like(LostFoundPost::getDescription, keyword)
+                    .or()
+                    .like(LostFoundPost::getLocation, keyword));
+        }
+
+        if (query.getStatus() != null) {
+            // 公开搜索不提供管理员的全状态查询能力；请求隐藏或关闭状态时返回空页，
+            // 同时不泄露这些状态是否存在数据。
+            if (!query.getStatus().isPubliclyVisible()) {
+                return new PageResult<>(List.of(), query.getPage(), query.getSize(), 0);
+            }
+            wrapper.eq(LostFoundPost::getStatus, query.getStatus());
+        } else {
+            wrapper.in(LostFoundPost::getStatus, PostStatus.publiclyVisible());
+        }
+
+        applySearchSort(wrapper, query.getSort());
         return page(wrapper, query);
     }
 
@@ -313,6 +347,24 @@ public class PostServiceImpl implements PostService {
             validateCategory(query.getCategory());
         }
         return wrapper;
+    }
+
+    private void applySearchSort(
+            LambdaQueryWrapper<LostFoundPost> wrapper, PostSort sort) {
+        // 每种排序都追加 id 作为第二排序键，确保同一时间的数据有稳定顺序，
+        // 否则相邻分页可能重复或遗漏记录。
+        PostSort effectiveSort = sort == null ? PostSort.LATEST : sort;
+        switch (effectiveSort) {
+            case LATEST -> wrapper
+                    .orderByDesc(LostFoundPost::getCreatedAt)
+                    .orderByDesc(LostFoundPost::getId);
+            case OCCURRENCE_DESC -> wrapper
+                    .orderByDesc(LostFoundPost::getOccurrenceTime)
+                    .orderByDesc(LostFoundPost::getId);
+            case OCCURRENCE_ASC -> wrapper
+                    .orderByAsc(LostFoundPost::getOccurrenceTime)
+                    .orderByAsc(LostFoundPost::getId);
+        }
     }
 
     private void validateRange(PostQuery query) {

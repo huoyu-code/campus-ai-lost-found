@@ -20,7 +20,7 @@ import java.util.regex.Pattern;
 /**
  * 登录访问控制拦截器。
  *
- * <p>帖子列表和帖子详情允许匿名访问；其余未显式排除的接口默认要求登录。
+ * <p>帖子列表、帖子详情和公开搜索允许匿名访问；其余未显式排除的接口默认要求登录。
  * 管理员权限仍由具体 Service 再次校验，拦截器不替代业务授权。</p>
  */
 @Component
@@ -28,6 +28,7 @@ import java.util.regex.Pattern;
 public class AuthenticationInterceptor implements HandlerInterceptor {
 
     private static final Pattern PUBLIC_POST_GET = Pattern.compile("/posts(/\\d+)?");
+    private static final Pattern PUBLIC_SEARCH_GET = Pattern.compile("/search/posts");
 
     private final ObjectMapper objectMapper;
 
@@ -53,9 +54,10 @@ public class AuthenticationInterceptor implements HandlerInterceptor {
         if (!"GET".equalsIgnoreCase(request.getMethod())) {
             return false;
         }
-        // 只开放 /posts 和 /posts/{id}，申请列表等子资源仍要求登录。
+        // 只开放帖子浏览和搜索；申请列表、管理搜索等相似路径仍要求登录。
         String path = request.getRequestURI().substring(request.getContextPath().length());
-        return PUBLIC_POST_GET.matcher(path).matches();
+        return PUBLIC_POST_GET.matcher(path).matches()
+                || PUBLIC_SEARCH_GET.matcher(path).matches();
     }
 
     private void writeError(HttpServletResponse response, ApiException exception,
