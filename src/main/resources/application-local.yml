@@ -1,0 +1,12 @@
+# The default local profile intentionally loads the ignored repository-root .env.
+# Both paths support starting from backend/ or from the repository root.
+spring:
+  config:
+    import:
+      - optional:file:./.env[.properties]
+      - optional:file:../.env[.properties]
+
+logging:
+  level:
+    com.campus.lostfound: INFO
+

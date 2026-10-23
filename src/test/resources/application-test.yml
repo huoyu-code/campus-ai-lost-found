@@ -1,0 +1,32 @@
+spring:
+  datasource:
+    driver-class-name: org.h2.Driver
+    url: jdbc:h2:mem:campus_test;MODE=MySQL;DB_CLOSE_DELAY=-1;DATABASE_TO_LOWER=TRUE
+    username: sa
+    password:
+  data:
+    redis:
+      host: localhost
+      port: 6379
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:schema-test.sql
+
+management:
+  health:
+    redis:
+      enabled: false
+    db:
+      enabled: false
+  endpoint:
+    health:
+      validate-group-membership: false
+
+app:
+  cors:
+    allowed-origins: http://localhost:5173
+  jwt:
+    secret: test-only-jwt-secret-that-is-at-least-32-bytes
+    ttl-minutes: 60
+

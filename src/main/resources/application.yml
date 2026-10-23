@@ -1,0 +1,98 @@
+server:
+  port: 8080
+  servlet:
+    context-path: /api
+    encoding:
+      charset: UTF-8
+      force: true
+
+spring:
+  application:
+    name: campus-lost-found
+  profiles:
+    default: local
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://${MYSQL_HOST:127.0.0.1}:${MYSQL_PORT:3306}/${MYSQL_DATABASE:campus_lost_found_dev}?useUnicode=true&characterEncoding=utf8&serverTimezone=${APP_TIME_ZONE:Asia/Shanghai}&useSSL=false&allowPublicKeyRetrieval=true
+    username: ${MYSQL_USERNAME:root}
+    password: ${MYSQL_PASSWORD:}
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 3000
+      initialization-fail-timeout: -1
+      pool-name: CampusMySqlPool
+  data:
+    redis:
+      host: ${REDIS_HOST:127.0.0.1}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: 3s
+  jackson:
+    time-zone: ${APP_TIME_ZONE:Asia/Shanghai}
+    serialization:
+      write-dates-as-timestamps: false
+    deserialization:
+      fail-on-unknown-properties: true
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.nologging.NoLoggingImpl
+  global-config:
+    banner: false
+    db-config:
+      id-type: auto
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      group:
+        database:
+          include: db
+        redis:
+          include: redis
+      show-details: never
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+
+app:
+  time-zone: ${APP_TIME_ZONE:Asia/Shanghai}
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173}
+  jwt:
+    secret: ${JWT_SECRET:}
+    ttl-minutes: ${JWT_TTL_MINUTES:60}
+  bootstrap-admin:
+    enabled: ${ADMIN_BOOTSTRAP_ENABLED:false}
+    username: ${ADMIN_USERNAME:}
+    password: ${ADMIN_PASSWORD:}
+    nickname: ${ADMIN_NICKNAME:系统管理员}
+  ai:
+    base-url: ${AI_BASE_URL:https://api.deepseek.com}
+    chat-path: ${AI_CHAT_PATH:/chat/completions}
+    model: ${AI_MODEL:deepseek-flash}
+    api-key: ${AI_API_KEY:}
+    connect-timeout-seconds: ${AI_CONNECT_TIMEOUT_SECONDS:5}
+    response-timeout-seconds: ${AI_RESPONSE_TIMEOUT_SECONDS:30}
+    max-input-chars: ${AI_MAX_INPUT_CHARS:1000}
+    max-output-tokens: ${AI_MAX_OUTPUT_TOKENS:800}
+    rate-limit-per-minute: ${AI_RATE_LIMIT_PER_MINUTE:10}
+
+logging:
+  level:
+    root: INFO
+    com.campus.lostfound: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} %-5level [%thread] [traceId=%X{traceId:-}] %logger{36} - %msg%n"
+

@@ -1,0 +1,12 @@
+# The committed application-local.yml imports the repository-root .env.
+# Use this example only when a separate local override is needed.
+spring:
+  config:
+    import:
+      - optional:file:./.env[.properties]
+      - optional:file:../.env[.properties]
+
+logging:
+  level:
+    com.campus.lostfound: DEBUG
+

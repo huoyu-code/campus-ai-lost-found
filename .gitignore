@@ -1,0 +1,72 @@
+# -----------------------------------------------------------------------------
+# Secrets and local environment
+# -----------------------------------------------------------------------------
+# Environment files
+.env
+.env.*
+!.env.example
+!.env.template
+
+# Private keys, certificates and credential stores
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+*.truststore
+
+# Local-only Spring configuration and credential directories
+**/application-secret.yml
+**/application-secrets.yml
+**/application-local-*.yml
+**/secrets/
+**/credentials/
+
+# Local Maven credentials
+**/settings-security.xml
+**/settings-local.xml
+
+# -----------------------------------------------------------------------------
+# Maven and test output
+# -----------------------------------------------------------------------------
+/target/
+/out/
+*.class
+*.log
+hs_err_pid*
+replay_pid*
+.attach_pid*
+.springBeans
+*.pid
+*.tmp
+*.bak
+
+# Maven release/plugin backups
+release.properties
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+
+# -----------------------------------------------------------------------------
+# IDE and workspace files
+# -----------------------------------------------------------------------------
+/.idea/
+/.vscode/
+/.settings/
+/.project
+/.classpath
+/.factorypath
+.apt_generated/
+.apt_generated_tests/
+.sts4-cache/
+*.iml
+*.ipr
+*.iws
+
+# -----------------------------------------------------------------------------
+# Operating system files
+# -----------------------------------------------------------------------------
+.DS_Store
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
