@@ -3,6 +3,9 @@ package com.campus.lostfound.common.trace;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.util.StringUtils;
 
+/**
+ * Trace ID 在请求属性、HTTP 头和日志中的统一键名。
+ */
 public final class TraceIds {
 
     public static final String ATTRIBUTE = "traceId";

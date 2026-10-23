@@ -1,3 +1,4 @@
+# HTTP 服务统一挂载在 /api 下，前端和 Swagger 共用同一入口前缀。
 server:
   port: 8080
   servlet:
@@ -9,6 +10,7 @@ server:
 spring:
   application:
     name: campus-lost-found
+  # 默认使用 local，profile 文件只负责导入本地 .env，不保存真实凭据。
   profiles:
     default: local
   datasource:
@@ -23,6 +25,7 @@ spring:
       initialization-fail-timeout: -1
       pool-name: CampusMySqlPool
   data:
+    # Redis 当前用于 JWT 吊销；WebSocket 票据和 AI 限流将在后续阶段复用。
     redis:
       host: ${REDIS_HOST:127.0.0.1}
       port: ${REDIS_PORT:6379}
@@ -37,7 +40,9 @@ spring:
 
 mybatis-plus:
   configuration:
+    # 数据库 snake_case 字段自动映射到 Java camelCase 属性。
     map-underscore-to-camel-case: true
+    # 关闭 SQL 参数日志，避免用户密码或隐私内容进入控制台。
     log-impl: org.apache.ibatis.logging.nologging.NoLoggingImpl
   global-config:
     banner: false
@@ -45,6 +50,7 @@ mybatis-plus:
       id-type: auto
 
 management:
+  # 管理端点只暴露健康和基础信息，不开放配置、环境变量等敏感端点。
   endpoints:
     web:
       exposure:
@@ -61,6 +67,7 @@ management:
       show-details: never
 
 springdoc:
+  # Springdoc 根据 Controller 生成文档，路径与 /api context-path 叠加。
   api-docs:
     path: /v3/api-docs
   swagger-ui:
@@ -71,14 +78,17 @@ app:
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173}
   jwt:
+    # 空默认值迫使本地环境显式提供 JWT_SECRET，应用启动时会校验长度。
     secret: ${JWT_SECRET:}
     ttl-minutes: ${JWT_TTL_MINUTES:60}
   bootstrap-admin:
+    # 默认不创建管理员；仅在首次初始化时临时启用。
     enabled: ${ADMIN_BOOTSTRAP_ENABLED:false}
     username: ${ADMIN_USERNAME:}
     password: ${ADMIN_PASSWORD:}
     nickname: ${ADMIN_NICKNAME:系统管理员}
   ai:
+    # 智能问答通过后端直接调用 DeepSeek HTTP API，不把密钥暴露给浏览器。
     base-url: ${AI_BASE_URL:https://api.deepseek.com}
     chat-path: ${AI_CHAT_PATH:/chat/completions}
     model: ${AI_MODEL:deepseek-flash}

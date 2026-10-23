@@ -21,6 +21,12 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+/**
+ * 帖子创建、筛选、编辑、关闭和权限边界的集成测试。
+ *
+ * <p>测试通过 MockMvc 调用真实接口，数据写入 H2 的 MySQL 兼容模式，
+ * 每个测试使用随机用户名，避免共享内存数据库时互相冲突。</p>
+ */
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
@@ -40,6 +46,7 @@ class PostFlowIntegrationTest {
         Session owner = registerAndLogin("owner");
         Session other = registerAndLogin("other");
 
+        // 准备一条带图片和受限联系方式的 FOUND 帖子。
         String createBody = """
                 {
                   "postType": "FOUND",
@@ -69,6 +76,7 @@ class PostFlowIntegrationTest {
 
         long postId = objectMapper.readTree(createdResponse).path("data").path("id").asLong();
 
+        // 公开列表不返回完整描述，并支持类型和分类筛选。
         mockMvc.perform(get("/posts")
                         .queryParam("postType", "FOUND")
                         .queryParam("category", "证件卡片"))
@@ -77,6 +85,7 @@ class PostFlowIntegrationTest {
                 .andExpect(jsonPath("$.data.records[0].id").value(postId))
                 .andExpect(jsonPath("$.data.records[0].description").isEmpty());
 
+        // 非发布者请求详情时，服务端应裁剪 ACCEPTED_ONLY 联系方式。
         mockMvc.perform(get("/posts/{id}", postId)
                         .header("Authorization", other.authorization()))
                 .andExpect(status().isOk())
@@ -96,6 +105,7 @@ class PostFlowIntegrationTest {
                 }
                 """;
 
+        // 所有权校验必须发生在写入之前。
         mockMvc.perform(put("/posts/{id}", postId)
                         .header("Authorization", other.authorization())
                         .contentType(MediaType.APPLICATION_JSON)
@@ -110,6 +120,7 @@ class PostFlowIntegrationTest {
                 .andExpect(jsonPath("$.data.title").value("图书馆捡到一张校园卡"))
                 .andExpect(jsonPath("$.data.imageUrls.length()").value(1));
 
+        // 关闭是状态变更而不是物理删除，历史数据仍保留。
         mockMvc.perform(patch("/posts/{id}/status", postId)
                         .header("Authorization", owner.authorization())
                         .contentType(MediaType.APPLICATION_JSON)
@@ -117,9 +128,11 @@ class PostFlowIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status").value("CLOSED"));
 
+        // CLOSED 帖子对匿名用户不可见。
         mockMvc.perform(get("/posts/{id}", postId))
                 .andExpect(status().isNotFound());
 
+        // 发布者仍能从“我的帖子”看到 CLOSED 状态。
         mockMvc.perform(get("/users/me/posts")
                         .header("Authorization", owner.authorization()))
                 .andExpect(status().isOk())

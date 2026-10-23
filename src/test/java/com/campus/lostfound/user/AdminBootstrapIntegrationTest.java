@@ -13,6 +13,9 @@ import org.springframework.test.context.ActiveProfiles;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * 验证管理员初始化只保存 BCrypt 哈希，并使用正确的角色和状态。
+ */
 @SpringBootTest(properties = {
         "app.bootstrap-admin.enabled=true",
         "app.bootstrap-admin.username=bootstrap_admin",

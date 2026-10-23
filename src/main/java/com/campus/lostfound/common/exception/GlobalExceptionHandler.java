@@ -22,6 +22,12 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.util.stream.Collectors;
 
+/**
+ * 全局异常到 HTTP 响应的一致性映射。
+ *
+ * <p>参数错误、认证失败、权限不足、资源不存在和状态冲突分别使用对应 HTTP 状态码。
+ * 未识别异常只返回通用提示和 traceId，详细堆栈仅写入服务端日志。</p>
+ */
 @Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -87,6 +93,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(DuplicateKeyException.class)
     public ResponseEntity<ApiResponse<Void>> handleDuplicateKey(
             DuplicateKeyException exception, HttpServletRequest request) {
+        // 唯一索引是并发写入时的最后一道保护，例如重复申请或重复用户名。
         return failure(HttpStatus.CONFLICT, ApiCode.CONFLICT, "数据已存在，请勿重复提交", request);
     }
 

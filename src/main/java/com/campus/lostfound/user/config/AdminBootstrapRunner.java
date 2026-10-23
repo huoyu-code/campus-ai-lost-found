@@ -16,6 +16,12 @@ import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
 
+/**
+ * 应用启动时按需创建首个管理员账号。
+ *
+ * <p>只有显式启用后才执行；用户名已存在时直接跳过，保证多次启动不会重复创建。
+ * 密码仍经过 BCrypt 哈希后再落库。</p>
+ */
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -50,6 +56,7 @@ public class AdminBootstrapRunner implements ApplicationRunner {
         }
         if (userMapper.selectCount(new LambdaQueryWrapper<SysUser>()
                 .eq(SysUser::getUsername, username)) > 0) {
+            // 初始化是幂等操作：允许应用反复启动，不覆盖已有账号密码。
             log.info("管理员初始化跳过：用户名 {} 已存在", username);
             return;
         }
@@ -68,6 +75,7 @@ public class AdminBootstrapRunner implements ApplicationRunner {
                 .updatedAt(now)
                 .build();
         userMapper.insert(admin);
+        // 日志只记录用户名，绝不能记录管理员密码或密码哈希。
         log.info("管理员账号 {} 已初始化", username);
     }
 }

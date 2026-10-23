@@ -5,6 +5,11 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
+/**
+ * 用户注册参数。
+ *
+ * <p>密码上限 72 字符与 BCrypt 的输入边界保持一致，手机号和邮箱允许留空。</p>
+ */
 public record RegisterRequest(
         @NotBlank(message = "用户名不能为空")
         @Pattern(

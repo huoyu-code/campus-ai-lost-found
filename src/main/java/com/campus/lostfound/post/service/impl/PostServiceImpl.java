@@ -3,6 +3,9 @@ package com.campus.lostfound.post.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.campus.lostfound.application.entity.ClaimApplication;
+import com.campus.lostfound.application.enums.ApplicationStatus;
+import com.campus.lostfound.application.mapper.ClaimApplicationMapper;
 import com.campus.lostfound.common.api.PageResult;
 import com.campus.lostfound.common.exception.ApiException;
 import com.campus.lostfound.common.security.LoginUser;
@@ -22,6 +25,8 @@ import com.campus.lostfound.post.service.PostService;
 import com.campus.lostfound.post.vo.PostVO;
 import com.campus.lostfound.post.vo.UserSummaryVO;
 import com.campus.lostfound.user.entity.SysUser;
+import com.campus.lostfound.user.enums.UserRole;
+import com.campus.lostfound.user.enums.UserStatus;
 import com.campus.lostfound.user.mapper.SysUserMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -38,15 +43,24 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
+/**
+ * 帖子业务实现。
+ *
+ * <p>核心原则是：前端传入的数据只作为候选值，状态、所有权和联系方式可见性都必须
+ * 在服务端重新判断。涉及状态迁移的写操作使用“当前状态作为 WHERE 条件”的条件更新，
+ * 以识别并发冲突而不是静默覆盖。</p>
+ */
 @Service
 @RequiredArgsConstructor
 public class PostServiceImpl implements PostService {
 
+    // 分类暂时作为受控常量维护，保证数据库 CHECK 约束与应用校验一致。
     private static final Set<String> CATEGORIES = Set.of(
             "证件卡片", "电子数码", "书籍资料", "生活用品", "服饰鞋包", "钥匙饰品", "其他");
 
     private final LostFoundPostMapper postMapper;
     private final PostImageMapper imageMapper;
+    private final ClaimApplicationMapper applicationMapper;
     private final SysUserMapper userMapper;
 
     @Override
@@ -54,6 +68,7 @@ public class PostServiceImpl implements PostService {
     public PostVO create(Long userId, CreatePostRequest request) {
         String category = validateCategory(request.category());
         LocalDateTime now = LocalDateTime.now();
+        // MVP 不做发布审核，新帖子直接进入公开状态。
         LostFoundPost post = LostFoundPost.builder()
                 .publisherId(userId)
                 .postType(request.postType())
@@ -76,6 +91,7 @@ public class PostServiceImpl implements PostService {
     @Override
     public PostVO getDetail(Long postId) {
         LostFoundPost post = requirePost(postId);
+        // 关闭和隐藏帖子只对发布者或管理员可见，使用 404 避免泄露资源是否存在。
         if (!canView(post)) {
             throw ApiException.notFound("帖子不存在或不可见");
         }
@@ -87,6 +103,7 @@ public class PostServiceImpl implements PostService {
         validateRange(query);
         LambdaQueryWrapper<LostFoundPost> wrapper = baseQuery(query);
         if (query.getStatus() != null) {
+            // 请求非公开状态时返回空页，不把 CLOSED/HIDDEN 数据暴露给游客。
             if (!query.getStatus().isPubliclyVisible()) {
                 return new PageResult<>(List.of(), query.getPage(), query.getSize(), 0);
             }
@@ -102,6 +119,7 @@ public class PostServiceImpl implements PostService {
     @Override
     public PageResult<PostVO> pageMine(Long userId, PostQuery query) {
         validateRange(query);
+        // “我的帖子”不加公开状态过滤，让发布者能看到 CLOSED/HIDDEN 历史。
         LambdaQueryWrapper<LostFoundPost> wrapper = baseQuery(query)
                 .eq(LostFoundPost::getPublisherId, userId);
         if (query.getStatus() != null) {
@@ -113,6 +131,41 @@ public class PostServiceImpl implements PostService {
     }
 
     @Override
+    public PageResult<PostVO> pageForAdmin(
+            Long operatorId, PostQuery query, String keyword, Long publisherId) {
+        SysUser operator = userMapper.selectById(operatorId);
+        if (operator == null
+                || operator.getStatus() != UserStatus.ACTIVE
+                || operator.getRole() != UserRole.ADMIN) {
+            throw ApiException.forbidden("仅管理员可以查看全平台帖子");
+        }
+        validateRange(query);
+        LambdaQueryWrapper<LostFoundPost> wrapper = baseQuery(query)
+                .eq(query.getStatus() != null,
+                        LostFoundPost::getStatus, query.getStatus())
+                .eq(publisherId != null, LostFoundPost::getPublisherId, publisherId);
+        if (StringUtils.hasText(keyword)) {
+            String normalizedKeyword = keyword.trim();
+            wrapper.and(nested -> nested
+                    .like(LostFoundPost::getTitle, normalizedKeyword)
+                    .or()
+                    .like(LostFoundPost::getDescription, normalizedKeyword)
+                    .or()
+                    .like(LostFoundPost::getLocation, normalizedKeyword));
+        }
+        wrapper.orderByDesc(LostFoundPost::getCreatedAt)
+                .orderByDesc(LostFoundPost::getId);
+        Page<LostFoundPost> page = postMapper.selectPage(
+                new Page<>(query.getPage(), query.getSize()), wrapper);
+        return new PageResult<>(
+                assemble(page.getRecords(), true),
+                page.getCurrent(),
+                page.getSize(),
+                page.getTotal()
+        );
+    }
+
+    @Override
     @Transactional(rollbackFor = Exception.class)
     public PostVO update(Long postId, Long userId, UpdatePostRequest request) {
         LostFoundPost existing = requirePost(postId);
@@ -120,9 +173,17 @@ public class PostServiceImpl implements PostService {
         if (existing.getStatus() != PostStatus.PUBLISHED) {
             throw ApiException.conflict("只有已发布状态的帖子可以编辑");
         }
+        // 已有申请时修改 LOST/FOUND 会让 CLAIM/CLUE 类型失去意义。
+        if (request.postType() != existing.getPostType()
+                && applicationMapper.selectCount(
+                        new LambdaQueryWrapper<ClaimApplication>()
+                                .eq(ClaimApplication::getPostId, postId)) > 0) {
+            throw ApiException.conflict("已有申请的帖子不能修改帖子类型");
+        }
 
         String category = validateCategory(request.category());
         LocalDateTime now = LocalDateTime.now();
+        // WHERE 同时带状态和发布者条件，防止并发状态变化后覆盖新数据。
         int updated = postMapper.update(null, new LambdaUpdateWrapper<LostFoundPost>()
                 .eq(LostFoundPost::getId, postId)
                 .eq(LostFoundPost::getPublisherId, userId)
@@ -152,9 +213,18 @@ public class PostServiceImpl implements PostService {
             Long postId, Long userId, UpdatePostStatusRequest request) {
         LostFoundPost post = requirePost(postId);
         requireOwner(post, userId);
-        if (request.targetStatus() != PostStatus.CLOSED) {
-            throw ApiException.badRequest("该接口当前只支持关闭帖子");
+        if (request.targetStatus() != PostStatus.CLOSED
+                && request.targetStatus() != PostStatus.RESOLVED) {
+            throw ApiException.badRequest("该接口只支持关闭或确认完成帖子");
         }
+        // 两个目标状态需要不同业务校验，因此分别进入独立方法。
+        return request.targetStatus() == PostStatus.CLOSED
+                ? closePost(post, userId)
+                : resolvePost(post, userId);
+    }
+
+    private PostVO closePost(LostFoundPost post, Long userId) {
+        Long postId = post.getId();
         if (post.getStatus() == PostStatus.CLOSED) {
             return getDetail(postId);
         }
@@ -164,6 +234,7 @@ public class PostServiceImpl implements PostService {
         }
 
         LocalDateTime now = LocalDateTime.now();
+        // 条件更新相当于一个轻量状态锁：只有一个请求能把当前状态推进到 CLOSED。
         int updated = postMapper.update(null, new LambdaUpdateWrapper<LostFoundPost>()
                 .eq(LostFoundPost::getId, postId)
                 .eq(LostFoundPost::getPublisherId, userId)
@@ -174,7 +245,44 @@ public class PostServiceImpl implements PostService {
         if (updated != 1) {
             throw ApiException.conflict("帖子状态已变化，请刷新后重试");
         }
+        // 关闭后待处理申请不再有业务意义，批量拒绝但保留历史记录。
+        applicationMapper.update(null,
+                new LambdaUpdateWrapper<ClaimApplication>()
+                        .eq(ClaimApplication::getPostId, postId)
+                        .eq(ClaimApplication::getStatus, ApplicationStatus.PENDING)
+                        .set(ClaimApplication::getStatus, ApplicationStatus.REJECTED)
+                        .set(ClaimApplication::getProcessedBy, userId)
+                        .set(ClaimApplication::getProcessNote, "帖子已由发布者关闭")
+                        .set(ClaimApplication::getProcessedAt, now)
+                        .set(ClaimApplication::getUpdatedAt, now));
         return getDetail(postId);
+    }
+
+    private PostVO resolvePost(LostFoundPost post, Long userId) {
+        if (post.getStatus() != PostStatus.PROCESSING) {
+            throw ApiException.conflict("只有处理中的帖子可以确认完成");
+        }
+        ClaimApplication accepted = applicationMapper.selectOne(
+                new LambdaQueryWrapper<ClaimApplication>()
+                        .eq(ClaimApplication::getPostId, post.getId())
+                        .eq(ClaimApplication::getStatus, ApplicationStatus.ACCEPTED));
+        if (accepted == null || accepted.getCompletionRequestedAt() == null) {
+            throw ApiException.conflict("申请人尚未发起完成请求");
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        // 必须同时满足：当前状态 PROCESSING、申请已接受、申请人已请求完成。
+        int updated = postMapper.update(null, new LambdaUpdateWrapper<LostFoundPost>()
+                .eq(LostFoundPost::getId, post.getId())
+                .eq(LostFoundPost::getPublisherId, userId)
+                .eq(LostFoundPost::getStatus, PostStatus.PROCESSING)
+                .set(LostFoundPost::getStatus, PostStatus.RESOLVED)
+                .set(LostFoundPost::getResolvedAt, now)
+                .set(LostFoundPost::getUpdatedAt, now));
+        if (updated != 1) {
+            throw ApiException.conflict("帖子状态已变化，请刷新后重试");
+        }
+        return getDetail(post.getId());
     }
 
     private PageResult<PostVO> page(
@@ -219,6 +327,7 @@ public class PostServiceImpl implements PostService {
         if (posts.isEmpty()) {
             return List.of();
         }
+        // 批量查询图片和用户，避免列表渲染时产生 N+1 查询。
         List<Long> postIds = posts.stream().map(LostFoundPost::getId).toList();
         List<PostImage> imageRows = imageMapper.selectList(new LambdaQueryWrapper<PostImage>()
                 .in(PostImage::getPostId, postIds)
@@ -234,7 +343,7 @@ public class PostServiceImpl implements PostService {
                 .map(LostFoundPost::getPublisherId)
                 .collect(HashSet::new, HashSet::add, HashSet::addAll);
         Map<Long, SysUser> users = new HashMap<>();
-        for (SysUser user : userMapper.selectBatchIds(userIds)) {
+        for (SysUser user : userMapper.selectByIds(userIds)) {
             users.put(user.getId(), user);
         }
 
@@ -246,6 +355,7 @@ public class PostServiceImpl implements PostService {
             SysUser publisher = users.get(post.getPublisherId());
             boolean owner = viewer != null && Objects.equals(viewer.userId(), post.getPublisherId());
             boolean admin = viewer != null && viewer.isAdmin();
+            // detail=false 时永远不返回联系方式，减少列表接口的敏感数据暴露面。
             boolean contactVisible = detail && canViewContact(post, owner, admin);
 
             result.add(new PostVO(
@@ -278,6 +388,7 @@ public class PostServiceImpl implements PostService {
 
     private boolean canView(LostFoundPost post) {
         LoginUser viewer = UserContext.get();
+        // 公开状态不要求登录；非公开状态仅发布者和管理员可访问。
         if (post.getStatus().isPubliclyVisible()) {
             return true;
         }
@@ -289,6 +400,7 @@ public class PostServiceImpl implements PostService {
         if (!StringUtils.hasText(post.getContactText())) {
             return false;
         }
+        // 发布者和管理员始终可见自己的联系方式。
         if (owner || admin) {
             return true;
         }
@@ -296,8 +408,17 @@ public class PostServiceImpl implements PostService {
         if (viewer == null) {
             return false;
         }
-        return post.getContactVisibility() == ContactVisibility.AUTHENTICATED;
-        // ACCEPTED_ONLY will additionally allow the accepted applicant in stage 5.
+        if (post.getContactVisibility() == ContactVisibility.AUTHENTICATED) {
+            return true;
+        }
+        // ACCEPTED_ONLY 通过查询已接受申请判断，不信任前端传入的角色或申请状态。
+        return post.getContactVisibility() == ContactVisibility.ACCEPTED_ONLY
+                && applicationMapper.selectCount(
+                        new LambdaQueryWrapper<ClaimApplication>()
+                                .eq(ClaimApplication::getPostId, post.getId())
+                                .eq(ClaimApplication::getApplicantId, viewer.userId())
+                                .eq(ClaimApplication::getStatus,
+                                        ApplicationStatus.ACCEPTED)) > 0;
     }
 
     private LostFoundPost requirePost(Long postId) {
@@ -315,6 +436,7 @@ public class PostServiceImpl implements PostService {
     }
 
     private void replaceImages(Long postId, List<String> imageUrls, LocalDateTime now) {
+        // 图片集合采用“先删后建”的全量替换语义，PUT 请求可以清空图片。
         imageMapper.delete(new LambdaQueryWrapper<PostImage>()
                 .eq(PostImage::getPostId, postId));
         if (imageUrls == null) {

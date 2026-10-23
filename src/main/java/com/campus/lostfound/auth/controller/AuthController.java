@@ -18,6 +18,11 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+/**
+ * 注册、登录和退出接口。
+ *
+ * <p>Controller 只负责 HTTP 参数与状态码，密码校验、令牌签发和吊销都在 Service 中完成。</p>
+ */
 @RestController
 @RequestMapping("/auth")
 @RequiredArgsConstructor
@@ -43,6 +48,7 @@ public class AuthController {
 
     @PostMapping("/logout")
     public ApiResponse<Void> logout(HttpServletRequest servletRequest) {
+        // 注销只吊销当前令牌的 jti，不影响同一账号在其他设备上的会话。
         authService.logout(UserContext.require());
         return ApiResponse.success(null, TraceIds.get(servletRequest));
     }

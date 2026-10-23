@@ -2,8 +2,15 @@ package com.campus.lostfound.common.security;
 
 import com.campus.lostfound.common.exception.ApiException;
 
+/**
+ * 当前请求的登录用户上下文。
+ *
+ * <p>身份由 {@code JwtAuthenticationFilter} 写入，在请求结束后必须清理。
+ * Service 可以读取该上下文做数据可见性判断，但接口授权仍由拦截器和具体业务规则共同保证。</p>
+ */
 public final class UserContext {
 
+    // 每个请求线程独立保存身份，避免通过 HTTP Session 传递状态。
     private static final ThreadLocal<LoginUser> CURRENT = new ThreadLocal<>();
 
     private UserContext() {

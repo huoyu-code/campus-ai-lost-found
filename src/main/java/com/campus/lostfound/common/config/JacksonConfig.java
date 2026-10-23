@@ -9,6 +9,12 @@ import org.springframework.context.annotation.Configuration;
 import java.time.ZoneId;
 import java.util.TimeZone;
 
+/**
+ * JSON 日期时间配置。
+ *
+ * <p>业务时间统一按 Asia/Shanghai 解释，并输出 ISO-8601 文本而不是时间戳，
+ * 使前端和 Swagger 示例更易读。</p>
+ */
 @Configuration
 public class JacksonConfig {
 

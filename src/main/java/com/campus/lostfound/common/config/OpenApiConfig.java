@@ -5,6 +5,9 @@ import io.swagger.v3.oas.models.info.Info;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+/**
+ * OpenAPI 文档元信息，实际接口由 Springdoc 根据 Controller 自动生成。
+ */
 @Configuration
 public class OpenApiConfig {
 

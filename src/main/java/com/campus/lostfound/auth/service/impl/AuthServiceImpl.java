@@ -24,6 +24,12 @@ import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
 
+/**
+ * 认证业务实现。
+ *
+ * <p>密码永远以 BCrypt 哈希保存。登录失败统一返回“用户名或密码错误”，
+ * 避免向攻击者区分账号是否存在。</p>
+ */
 @Service
 @RequiredArgsConstructor
 public class AuthServiceImpl implements AuthService {
@@ -37,6 +43,7 @@ public class AuthServiceImpl implements AuthService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public UserProfileVO register(RegisterRequest request) {
+        // 先查询用于给出友好错误；数据库唯一索引仍负责并发场景的最终兜底。
         String username = request.username().trim();
         if (userMapper.selectCount(new LambdaQueryWrapper<SysUser>()
                 .eq(SysUser::getUsername, username)) > 0) {
@@ -72,6 +79,7 @@ public class AuthServiceImpl implements AuthService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public LoginResponse login(LoginRequest request) {
+        // 账号不存在和密码错误使用同一条错误信息，避免泄露账号存在性。
         SysUser user = userMapper.selectOne(new LambdaQueryWrapper<SysUser>()
                 .eq(SysUser::getUsername, request.username().trim())
                 .last("LIMIT 1"));

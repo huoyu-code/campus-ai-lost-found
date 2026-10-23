@@ -12,6 +12,11 @@ import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 
+/**
+ * 用户数据库实体，对应 {@code sys_user}。
+ *
+ * <p>该对象只在后端内部使用，包含 {@code passwordHash}，不能直接作为 API 响应返回。</p>
+ */
 @Data
 @Builder
 @NoArgsConstructor

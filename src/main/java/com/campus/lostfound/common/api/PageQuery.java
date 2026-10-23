@@ -5,6 +5,11 @@ import jakarta.validation.constraints.Min;
 import lombok.Getter;
 import lombok.Setter;
 
+/**
+ * 分页查询基类。
+ *
+ * <p>所有列表查询都必须继承此类型，确保页码合法且单页最多返回 50 条。</p>
+ */
 @Getter
 @Setter
 public class PageQuery {

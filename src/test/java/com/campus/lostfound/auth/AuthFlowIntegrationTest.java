@@ -20,6 +20,12 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+/**
+ * 认证接口的 HTTP 集成测试。
+ *
+ * <p>使用 MockMvc 走真实过滤器、拦截器和 Controller，只把 Redis 吊销服务替换为 Mock，
+ * 避免测试结果依赖本机 Redis 中是否存在旧键。</p>
+ */
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
@@ -49,6 +55,7 @@ class AuthFlowIntegrationTest {
                 }
                 """.formatted(username, password);
 
+        // 注册响应可以包含资料，但绝不能出现 passwordHash。
         String registerResponse = mockMvc.perform(post("/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(registerBody))
@@ -68,6 +75,7 @@ class AuthFlowIntegrationTest {
                 }
                 """.formatted(username, password);
 
+        // 登录成功后返回 Bearer Token 和脱敏用户信息。
         String loginResponse = mockMvc.perform(post("/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(loginBody))
@@ -85,6 +93,7 @@ class AuthFlowIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.username").value(username));
 
+        // 退出接口把当前 jti 写入吊销服务，测试中该服务被 Mock。
         mockMvc.perform(post("/auth/logout")
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())

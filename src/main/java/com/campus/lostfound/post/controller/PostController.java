@@ -25,6 +25,11 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+/**
+ * 帖子的公开查询和登录用户写操作接口。
+ *
+ * <p>GET 列表与详情允许匿名访问；发布、编辑和状态变更要求登录，Service 再校验所有权。</p>
+ */
 @RestController
 @RequestMapping("/posts")
 @RequiredArgsConstructor
@@ -74,6 +79,7 @@ public class PostController {
             @PathVariable Long postId,
             @Valid @RequestBody UpdatePostStatusRequest body,
             HttpServletRequest request) {
+        // 当前只允许 CLOSED 和 RESOLVED，且 RESOLVED 必须先有完成请求。
         return ApiResponse.success(
                 postService.updateStatus(postId, UserContext.requireUserId(), body),
                 TraceIds.get(request)

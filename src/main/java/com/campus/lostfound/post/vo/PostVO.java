@@ -7,6 +7,12 @@ import com.campus.lostfound.post.enums.PostType;
 import java.time.LocalDateTime;
 import java.util.List;
 
+/**
+ * 帖子对外视图。
+ *
+ * <p>列表响应不返回完整描述；{@code contactText} 是否为空由服务端根据可见范围决定，
+ * 不能依赖前端隐藏敏感字段。</p>
+ */
 public record PostVO(
         Long id,
         PostType postType,

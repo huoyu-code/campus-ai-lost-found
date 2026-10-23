@@ -15,6 +15,9 @@ import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+/**
+ * 当前用户发布的帖子列表，包含已关闭和隐藏等非公开状态。
+ */
 @RestController
 @RequestMapping("/users/me/posts")
 @RequiredArgsConstructor

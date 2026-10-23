@@ -13,6 +13,11 @@ import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 
+/**
+ * 失物/招领统一帖子实体，对应 {@code lost_found_post}。
+ *
+ * <p>{@code publisherId} 是应用层维护的逻辑外键，数据库不创建物理外键。</p>
+ */
 @Data
 @Builder
 @NoArgsConstructor

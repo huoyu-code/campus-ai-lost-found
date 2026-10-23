@@ -16,6 +16,11 @@ import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
 
+/**
+ * 用户资料业务实现。
+ *
+ * <p>用户接口只返回 {@link UserProfileVO}，不会把包含密码哈希的数据库实体直接暴露给前端。</p>
+ */
 @Service
 @RequiredArgsConstructor
 public class UserServiceImpl implements UserService {
@@ -41,6 +46,7 @@ public class UserServiceImpl implements UserService {
     @Transactional(rollbackFor = Exception.class)
     public UserProfileVO updateProfile(Long userId, UpdateProfileRequest request) {
         SysUser user = requireUser(userId);
+        // 只 set 非 null 字段，实现部分更新语义。
         LambdaUpdateWrapper<SysUser> update = new LambdaUpdateWrapper<SysUser>()
                 .eq(SysUser::getId, userId)
                 .set(SysUser::getUpdatedAt, LocalDateTime.now());
@@ -79,6 +85,7 @@ public class UserServiceImpl implements UserService {
     @Transactional(rollbackFor = Exception.class)
     public void changePassword(Long userId, ChangePasswordRequest request) {
         SysUser user = requireUser(userId);
+        // 修改密码前必须验证原密码，防止令牌泄露后被直接替换密码。
         if (!passwordEncoder.matches(request.oldPassword(), user.getPasswordHash())) {
             throw ApiException.badRequest("原密码不正确");
         }

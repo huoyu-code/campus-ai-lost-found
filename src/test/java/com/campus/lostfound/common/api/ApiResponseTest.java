@@ -4,6 +4,9 @@ import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * 统一成功响应结构的基础单元测试。
+ */
 class ApiResponseTest {
 
     @Test

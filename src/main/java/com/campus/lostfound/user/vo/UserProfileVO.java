@@ -5,6 +5,9 @@ import com.campus.lostfound.user.enums.UserStatus;
 
 import java.time.LocalDateTime;
 
+/**
+ * 对外用户资料视图，刻意不包含密码哈希。
+ */
 public record UserProfileVO(
         Long id,
         String username,

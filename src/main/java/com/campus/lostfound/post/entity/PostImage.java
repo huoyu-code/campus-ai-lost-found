@@ -10,6 +10,9 @@ import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 
+/**
+ * 帖子图片 URL 实体，同一帖子的图片用小整数排序。
+ */
 @Data
 @Builder
 @NoArgsConstructor

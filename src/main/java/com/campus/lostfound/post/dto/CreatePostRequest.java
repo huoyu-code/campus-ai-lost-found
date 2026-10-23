@@ -10,6 +10,11 @@ import jakarta.validation.constraints.Size;
 import java.time.LocalDateTime;
 import java.util.List;
 
+/**
+ * 发布失物或招领帖子的参数。
+ *
+ * <p>图片只接受最多 6 个 HTTP(S) URL；项目不承担文件上传和对象存储职责。</p>
+ */
 public record CreatePostRequest(
         @NotNull(message = "帖子类型不能为空")
         PostType postType,

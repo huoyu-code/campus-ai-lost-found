@@ -4,6 +4,12 @@ import com.campus.lostfound.common.api.ApiCode;
 import lombok.Getter;
 import org.springframework.http.HttpStatus;
 
+/**
+ * 可预期的业务异常。
+ *
+ * <p>Service 抛出该异常表示请求本身不合法、无权限或存在状态冲突，
+ * 由全局异常处理器转换为统一响应；堆栈不会返回给客户端。</p>
+ */
 @Getter
 public class ApiException extends RuntimeException {
 

@@ -9,6 +9,11 @@ import jakarta.validation.constraints.Size;
 import java.time.LocalDateTime;
 import java.util.List;
 
+/**
+ * 编辑帖子参数。
+ *
+ * <p>只有发布者可以编辑，且帖子必须处于 {@code PUBLISHED}。已有申请时禁止改变帖子类型。</p>
+ */
 public record UpdatePostRequest(
         @NotNull(message = "帖子类型不能为空")
         com.campus.lostfound.post.enums.PostType postType,
