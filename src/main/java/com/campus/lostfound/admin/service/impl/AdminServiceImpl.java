@@ -24,6 +24,7 @@ import com.campus.lostfound.application.mapper.ClaimApplicationMapper;
 import com.campus.lostfound.application.service.ApplicationService;
 import com.campus.lostfound.application.vo.ApplicationVO;
 import com.campus.lostfound.auth.service.TokenRevocationService;
+import com.campus.lostfound.chat.websocket.ChatSessionRegistry;
 import com.campus.lostfound.common.api.PageResult;
 import com.campus.lostfound.common.exception.ApiException;
 import com.campus.lostfound.post.dto.PostQuery;
@@ -43,6 +44,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
@@ -80,6 +83,7 @@ public class AdminServiceImpl implements AdminService {
     private final PostService postService;
     private final ApplicationService applicationService;
     private final TokenRevocationService tokenRevocationService;
+    private final ChatSessionRegistry chatSessionRegistry;
     private final OperationLogService operationLogService;
     private final ObjectMapper objectMapper;
 
@@ -154,6 +158,7 @@ public class AdminServiceImpl implements AdminService {
             if (request.status() == UserStatus.DISABLED) {
                 // 禁用后立即吊销该用户此前签发的全部 JWT。
                 tokenRevocationService.invalidateAllForUser(userId);
+                closeSessionsAfterCommit(userId);
             }
             detail.put("afterStatus", request.status());
             detail.put("changed", true);
@@ -390,5 +395,16 @@ public class AdminServiceImpl implements AdminService {
 
     private String trimToNull(String value) {
         return StringUtils.hasText(value) ? value.trim() : null;
+    }
+
+    private void closeSessionsAfterCommit(Long userId) {
+        TransactionSynchronizationManager.registerSynchronization(
+                new TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        // 数据库状态和令牌失效成功提交后，才断开该用户的在线连接。
+                        chatSessionRegistry.closeUser(userId);
+                    }
+                });
     }
 }

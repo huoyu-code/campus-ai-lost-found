@@ -1,6 +1,9 @@
 -- 测试库使用 H2 的 MySQL 兼容模式；生产结构以根目录 sql/schema.sql 为准。
 -- 每个测试上下文启动时重建表，保证测试可重复运行。
 DROP TABLE IF EXISTS sys_operation_log;
+DROP TABLE IF EXISTS user_notification;
+DROP TABLE IF EXISTS chat_message;
+DROP TABLE IF EXISTS chat_conversation;
 DROP TABLE IF EXISTS sys_user;
 
 CREATE TABLE sys_user (
@@ -77,6 +80,40 @@ CREATE TABLE claim_application (
     CONSTRAINT uk_application_active
         UNIQUE (post_id, applicant_id, active_flag),
     CONSTRAINT uk_application_one_accepted UNIQUE (accepted_post_id)
+);
+
+CREATE TABLE chat_conversation (
+    id              BIGINT AUTO_INCREMENT PRIMARY KEY,
+    post_id         BIGINT       NOT NULL,
+    user_low_id     BIGINT       NOT NULL,
+    user_high_id    BIGINT       NOT NULL,
+    last_message_at TIMESTAMP    NULL,
+    created_at      TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at      TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uk_conversation_participants
+        UNIQUE (post_id, user_low_id, user_high_id)
+);
+
+CREATE TABLE chat_message (
+    id              BIGINT AUTO_INCREMENT PRIMARY KEY,
+    conversation_id BIGINT       NOT NULL,
+    sender_id       BIGINT       NOT NULL,
+    request_id      VARCHAR(64)  NOT NULL,
+    content         VARCHAR(2000) NOT NULL,
+    created_at      TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uk_message_sender_request UNIQUE (sender_id, request_id)
+);
+
+CREATE TABLE user_notification (
+    id                BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id           BIGINT       NOT NULL,
+    notification_type VARCHAR(30)  NOT NULL,
+    title             VARCHAR(150) NOT NULL,
+    content           VARCHAR(1000) NOT NULL,
+    business_type     VARCHAR(30)  NULL,
+    business_id       BIGINT       NULL,
+    read_at           TIMESTAMP    NULL,
+    created_at        TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE sys_operation_log (

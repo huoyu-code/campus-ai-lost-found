@@ -15,6 +15,8 @@ import com.campus.lostfound.application.service.ApplicationService;
 import com.campus.lostfound.application.vo.ApplicationVO;
 import com.campus.lostfound.common.api.PageResult;
 import com.campus.lostfound.common.exception.ApiException;
+import com.campus.lostfound.notification.enums.NotificationType;
+import com.campus.lostfound.notification.service.NotificationService;
 import com.campus.lostfound.post.entity.LostFoundPost;
 import com.campus.lostfound.post.enums.PostStatus;
 import com.campus.lostfound.post.mapper.LostFoundPostMapper;
@@ -49,10 +51,12 @@ import java.util.Set;
 public class ApplicationServiceImpl implements ApplicationService {
 
     private static final String OTHER_ACCEPTED_NOTE = "该帖其他申请已被接受";
+    private static final String BUSINESS_APPLICATION = "APPLICATION";
 
     private final ClaimApplicationMapper applicationMapper;
     private final LostFoundPostMapper postMapper;
     private final SysUserMapper userMapper;
+    private final NotificationService notificationService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -95,6 +99,15 @@ public class ApplicationServiceImpl implements ApplicationService {
             // 两个请求同时通过预查询时，后插入者会命中 uk_application_active。
             throw ApiException.conflict("你已提交过该帖子的有效申请");
         }
+        notificationService.create(
+                post.getPublisherId(),
+                NotificationType.APPLICATION_RECEIVED,
+                application.getApplicationType() == ApplicationType.CLAIM
+                        ? "收到新的认领申请" : "收到新的线索申请",
+                applicant.getNickname() + " 对《" + post.getTitle() + "》提交了申请",
+                BUSINESS_APPLICATION,
+                application.getId()
+        );
         return assemble(List.of(requireApplication(application.getId()))).getFirst();
     }
 
@@ -152,8 +165,24 @@ public class ApplicationServiceImpl implements ApplicationService {
         // 接受和拒绝走不同事务步骤：接受会联动帖子及其他申请。
         if (request.decision() == ApplicationDecision.ACCEPT) {
             accept(application, post, operator, processNote, now);
+            notificationService.create(
+                    application.getApplicantId(),
+                    NotificationType.APPLICATION_ACCEPTED,
+                    "申请已通过",
+                    "你对《" + post.getTitle() + "》提交的申请已被接受",
+                    BUSINESS_APPLICATION,
+                    applicationId
+            );
         } else {
             reject(application, operator, processNote, now);
+            notificationService.create(
+                    application.getApplicantId(),
+                    NotificationType.APPLICATION_REJECTED,
+                    "申请未通过",
+                    "你对《" + post.getTitle() + "》提交的申请未被接受",
+                    BUSINESS_APPLICATION,
+                    applicationId
+            );
         }
         return assemble(List.of(requireApplication(applicationId))).getFirst();
     }
@@ -216,6 +245,14 @@ public class ApplicationServiceImpl implements ApplicationService {
             // completion_requested_at IS NULL 防止并发请求写出不同的完成时间。
             throw ApiException.conflict("申请状态已变化，请刷新后重试");
         }
+        notificationService.create(
+                post.getPublisherId(),
+                NotificationType.COMPLETION_REQUESTED,
+                "申请人请求确认完成",
+                "申请人已对《" + post.getTitle() + "》发起完成请求",
+                BUSINESS_APPLICATION,
+                applicationId
+        );
         return assemble(List.of(requireApplication(applicationId))).getFirst();
     }
 
@@ -255,6 +292,11 @@ public class ApplicationServiceImpl implements ApplicationService {
             throw ApiException.conflict("申请状态已变化，请刷新后重试");
         }
 
+        List<ClaimApplication> otherPending = applicationMapper.selectList(
+                new LambdaQueryWrapper<ClaimApplication>()
+                        .eq(ClaimApplication::getPostId, post.getId())
+                        .eq(ClaimApplication::getStatus, ApplicationStatus.PENDING)
+                        .ne(ClaimApplication::getId, application.getId()));
         // 第三步将同帖其他 PENDING 申请统一拒绝，已处理申请不受影响。
         applicationMapper.update(null,
                 new LambdaUpdateWrapper<ClaimApplication>()
@@ -266,6 +308,16 @@ public class ApplicationServiceImpl implements ApplicationService {
                         .set(ClaimApplication::getProcessNote, OTHER_ACCEPTED_NOTE)
                         .set(ClaimApplication::getProcessedAt, now)
                         .set(ClaimApplication::getUpdatedAt, now));
+        for (ClaimApplication other : otherPending) {
+            notificationService.create(
+                    other.getApplicantId(),
+                    NotificationType.APPLICATION_REJECTED,
+                    "申请未通过",
+                    "《" + post.getTitle() + "》已接受其他申请",
+                    BUSINESS_APPLICATION,
+                    other.getId()
+            );
+        }
     }
 
     private void reject(

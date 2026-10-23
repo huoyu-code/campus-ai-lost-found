@@ -10,6 +10,8 @@ import com.campus.lostfound.common.api.PageResult;
 import com.campus.lostfound.common.exception.ApiException;
 import com.campus.lostfound.common.security.LoginUser;
 import com.campus.lostfound.common.security.UserContext;
+import com.campus.lostfound.notification.enums.NotificationType;
+import com.campus.lostfound.notification.service.NotificationService;
 import com.campus.lostfound.post.dto.CreatePostRequest;
 import com.campus.lostfound.post.dto.PostQuery;
 import com.campus.lostfound.post.dto.UpdatePostRequest;
@@ -59,11 +61,13 @@ public class PostServiceImpl implements PostService {
     // 分类暂时作为受控常量维护，保证数据库 CHECK 约束与应用校验一致。
     private static final Set<String> CATEGORIES = Set.of(
             "证件卡片", "电子数码", "书籍资料", "生活用品", "服饰鞋包", "钥匙饰品", "其他");
+    private static final String BUSINESS_APPLICATION = "APPLICATION";
 
     private final LostFoundPostMapper postMapper;
     private final PostImageMapper imageMapper;
     private final ClaimApplicationMapper applicationMapper;
     private final SysUserMapper userMapper;
+    private final NotificationService notificationService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -279,6 +283,10 @@ public class PostServiceImpl implements PostService {
         if (updated != 1) {
             throw ApiException.conflict("帖子状态已变化，请刷新后重试");
         }
+        List<ClaimApplication> pendingApplications = applicationMapper.selectList(
+                new LambdaQueryWrapper<ClaimApplication>()
+                        .eq(ClaimApplication::getPostId, postId)
+                        .eq(ClaimApplication::getStatus, ApplicationStatus.PENDING));
         // 关闭后待处理申请不再有业务意义，批量拒绝但保留历史记录。
         applicationMapper.update(null,
                 new LambdaUpdateWrapper<ClaimApplication>()
@@ -289,6 +297,16 @@ public class PostServiceImpl implements PostService {
                         .set(ClaimApplication::getProcessNote, "帖子已由发布者关闭")
                         .set(ClaimApplication::getProcessedAt, now)
                         .set(ClaimApplication::getUpdatedAt, now));
+        for (ClaimApplication pending : pendingApplications) {
+            notificationService.create(
+                    pending.getApplicantId(),
+                    NotificationType.APPLICATION_REJECTED,
+                    "帖子已关闭",
+                    "《" + post.getTitle() + "》已被发布者关闭，你的申请未通过",
+                    BUSINESS_APPLICATION,
+                    pending.getId()
+            );
+        }
         return getDetail(postId);
     }
 
@@ -316,6 +334,14 @@ public class PostServiceImpl implements PostService {
         if (updated != 1) {
             throw ApiException.conflict("帖子状态已变化，请刷新后重试");
         }
+        notificationService.create(
+                accepted.getApplicantId(),
+                NotificationType.POST_RESOLVED,
+                "帖子已完成",
+                "发布者已确认《" + post.getTitle() + "》处理完成",
+                "POST",
+                post.getId()
+        );
         return getDetail(post.getId());
     }
 

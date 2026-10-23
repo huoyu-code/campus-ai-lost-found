@@ -1,6 +1,7 @@
 package com.campus.lostfound.admin;
 
 import com.campus.lostfound.auth.service.TokenRevocationService;
+import com.campus.lostfound.chat.websocket.ChatSessionRegistry;
 import com.campus.lostfound.user.entity.SysUser;
 import com.campus.lostfound.user.enums.UserRole;
 import com.campus.lostfound.user.enums.UserStatus;
@@ -51,6 +52,9 @@ class AdminFlowIntegrationTest {
     @MockitoBean
     private TokenRevocationService tokenRevocationService;
 
+    @MockitoBean
+    private ChatSessionRegistry chatSessionRegistry;
+
     @Test
     void rejectsNormalUserAndAllowsAdminQueries() throws Exception {
         Session user = registerAndLogin("admin_denied");
@@ -91,6 +95,7 @@ class AdminFlowIntegrationTest {
                 .andExpect(jsonPath("$.data.status").value("DISABLED"));
 
         verify(tokenRevocationService).invalidateAllForUser(target.userId());
+        verify(chatSessionRegistry).closeUser(target.userId());
 
         mockMvc.perform(post("/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
